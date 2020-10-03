@@ -1,0 +1,5 @@
+(library
+ (name ppx_pspec_runtime)
+ (public_name ppx_pspec.runtime)
+ (libraries angstrom base bitvec)
+ (preprocess (pps ppx_base)))
