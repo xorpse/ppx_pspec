@@ -1,4 +1,3 @@
-open! Angstrom
 open Base
 open Base.Continue_or_stop
 
@@ -152,4 +151,107 @@ module Spec = struct
     let fix = Bitvec.concat 1 @@ List.rev fix in
     let mask = Bitvec.concat 1 @@ List.rev mask in
     { length; order; directives; modifier; fix; mask; modulus; extractors }
+end
+
+module Parser = struct
+  open! Angstrom
+
+  let number =
+    Int.of_string <$> take_while1 (function '0' .. '9' -> true | _ -> false)
+
+  let alpha_ =
+    satisfy (function 'A' .. 'Z' | 'a' .. 'z' | '_' -> true | _ -> false)
+
+  let alphanum_ =
+    satisfy (function 'A' .. 'Z' | 'a' .. 'z' | '0' .. '9' | '_' -> true | _ -> false)
+
+  let identifier =
+    consumed (alpha_ *> skip_many alphanum_)
+
+  let multispace0 = skip_many @@ satisfy Char.is_whitespace
+  let multispace1 = skip_many1 @@ satisfy Char.is_whitespace
+
+  let length =
+    (Fn.const Length.Variable <$> char '*') <|>
+    ((fun v -> Length.Fixed v) <$> number)
+
+  let order =
+    let p = (Fn.const Order.Msb <$> char '<')
+            <|>
+            (Fn.const Order.Lsb <$> char '>')
+    in
+    option Order.Msb p
+
+  let symbol = identifier
+
+  let stop =
+    option false (Fn.const true <$> char '=')
+
+  let location =
+    option (Length.Fixed 1) @@ char '(' *> length <* char ')'
+
+  let directive =
+    multispace0 *>
+    stop >>= fun stop ->
+    multispace0 *>
+    symbol >>= fun symbol ->
+    multispace0 *>
+    location >>| fun location ->
+    Directive.Directive { stop; symbol; location }
+
+  let fixed_byte =
+    char '{' *> begin
+      multispace0 *>
+      take_while1 (function '0'..'9' | 'a'..'f' | 'A'..'F' -> true | _ -> false)
+      <* multispace0
+    end <* char '}'
+    >>| fun v -> Int.of_string ("0x" ^ v) |> Char.of_int_exn
+
+  let fixed order =
+    multispace0 *>
+    begin
+      (Fn.const [Fixed.Skip] <$> char '-') <|>
+      (Fn.const [Fixed.Bit false] <$> char '0') <|>
+      (Fn.const [Fixed.Bit true] <$> char '1') <|>
+      ((fun v -> Fixed.bits v order) <$> fixed_byte)
+    end
+    >>| List.map ~f:(fun v -> Directive.Fixed v)
+
+  let directives order =
+    char '[' *>
+    multispace0 *>
+    many ((List.return <$> directive) <|> fixed order)
+    <* multispace0
+    <* char ']'
+    >>| List.concat
+
+  let modifier =
+    (Fn.const Modifier.Prefix <$> char '+')
+    <|>
+    begin
+      char '&' *>
+      multispace0 *>
+      symbol >>= fun symbol ->
+      multispace0 *>
+      char '(' *>
+      multispace0 *>
+      number >>= fun number ->
+      multispace0 *>
+      char ')' *>
+      return (Modifier.Suffix (symbol, number))
+    end
+
+  let maybe p =
+    option None (Option.some <$> p)
+
+  let spec =
+    multispace0 *>
+    length >>= fun length ->
+    multispace0 *>
+    order >>= fun order ->
+    multispace0 *>
+    directives order >>= fun directives ->
+    multispace0 *>
+    maybe modifier >>| fun modifier ->
+    Spec.make ?modifier ~length ~order ~directives
 end
