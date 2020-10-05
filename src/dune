@@ -1,4 +1,5 @@
 (library
  (public_name ppx_pspec)
  (kind ppx_rewriter)
- (libraries base ppxlib))
+ (preprocess (pps ppxlib.metaquot))
+ (libraries base ppxlib ppx_pspec.runtime))

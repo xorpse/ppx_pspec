@@ -254,4 +254,10 @@ module Parser = struct
     multispace0 *>
     maybe modifier >>| fun modifier ->
     Spec.make ?modifier ~length ~order ~directives
+
+  let parse_string =
+    parse_string ~consume:All spec
+
+  let parse_bigstring =
+    parse_bigstring ~consume:All spec
 end
