@@ -26,10 +26,10 @@ let expander ~loc ~path:_ = function
     in
     let innerf = List.fold_left
         names
-        ~init:[%expr if [%e matcher] then [%e extractedf ] else None ]
+        ~init:[%expr fun f -> if [%e matcher] then [%e extractedf ] else None ]
         ~f:(fun acc name -> [%expr fun [%p Ast_builder.Default.pvar ~loc ("__pspec_transf_" ^ name)] -> [%e acc] ])
     in
-    [%expr fun bv f -> [%e innerf]]
+    [%expr fun bv -> [%e innerf]]
   | _ ->
     Location.raise_errorf ~loc "[%%pspec] accepts a string, e.g., [%%pspec \"1111 0000\"]"
 
